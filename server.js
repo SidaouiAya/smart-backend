@@ -1,7 +1,6 @@
 const express = require('express');
 const cors = require('cors');
 const nodemailer = require('nodemailer');
-const { execSync } = require('child_process');
 const app = express();
 
 app.use(cors());
@@ -78,38 +77,32 @@ app.post('/api/update', (req, res) => {
 app.get('/api/sensors/:machine_id', (req, res) => {
   const data = sensorData[req.params.machine_id];
   if (!data) return res.status(404).json({ error: "Not found" });
-  res.json(data);
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+  res.status(200).json(data);
 });
 
 app.get('/api/sensors', (req, res) => res.json(sensorData));
 
-// ===== Prediction =====
+// ===== Prediction (bla Python) =====
 app.get('/api/predict/:machine_id', (req, res) => {
   const data = sensorData[req.params.machine_id];
   if (!data) return res.status(404).json({ error: "Not found" });
 
-  const now = new Date();
-  const input = [
-    data.temperature,
-    data.vibration === "YES" ? 1 : 0,
-    data.humidity,
-    data.current,
-    now.getHours(),
-    now.getDate(),
-    now.getMonth() + 1
-  ].join(',');
-
-  try {
-    const result = execSync(`python predict.py ${input}`).toString().trim();
-    res.json({ prediction: result });
-  } catch (e) {
-    res.status(500).json({ error: e.message });
+  let prediction = "Normal";
+  if (data.temperature > 30 || data.current > 2.0 || data.vibration === "YES") {
+    prediction = "Failure";
+  } else if (data.temperature > 25) {
+    prediction = "Warning";
   }
+
+  res.json({ prediction });
 });
 
 app.get('/', (req, res) => res.json({ message: "Smart Industry API running!" }));
 
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`Server running on http://localhost:${PORT}`);
 });
